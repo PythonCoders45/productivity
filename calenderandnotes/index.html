@@ -1,0 +1,1007 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Your Calender</title>
+    <style>
+        body {
+            background-color: #f2f2f2;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        #inputContainer {
+            display: flex; /* Flex to keep input and button on one line */
+            gap: 10px; /* Space between input and button */
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 500px;
+            justify-content: center;
+        }
+
+        #urlInput {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            flex-grow: 1; /* Allows input to take available space */
+        }
+
+        .button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            white-space: nowrap; /* Prevents button text from wrapping */
+        }
+
+        .button:hover {
+            background-color: #0056b3;
+        }
+
+        #faviconsContainer {
+            display: flex;
+            flex-wrap: wrap; /* Allows favicons to wrap to the next line */
+            gap: 20px; /* Space between favicons */
+            margin-top: 20px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .favicon-item {
+            position: relative; /* For positioning the delete button */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease-in-out;
+            max-width: 120px; /* Limit favicon item width */
+            word-wrap: break-word; /* Allow long URLs to wrap */
+        }
+
+        .favicon-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .favicon-item img {
+            width: 64px; /* Favicon size */
+            height: 64px;
+            margin-bottom: 10px;
+            object-fit: contain; /* Ensures image fits without cropping */
+        }
+
+        .favicon-item a {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 0.9em;
+            overflow: hidden; /* Hide overflow text */
+            text-overflow: ellipsis; /* Add ellipsis for overflow */
+            white-space: nowrap; /* Prevent URL from wrapping initially */
+            max-width: 100%; /* Constrain link width */
+        }
+
+        .favicon-item a:hover {
+            text-decoration: underline;
+            white-space: normal; /* Allow wrap on hover for full URL */
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            line-height: 1; /* To center the 'x' */
+            padding: 0;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .delete-btn:hover {
+            opacity: 1;
+            background-color: #c82333;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+        .left {
+            
+        }
+    </style>
+</head>
+<body>
+    
+
+    <div id="inputContainer">
+        <input type="url" id="urlInput" placeholder="Enter URL (e.g., example.com)">
+        <button id="addFaviconBtn" class="button">&#x002B;</button>
+    </div>
+    <div id="left">
+     <button id="showInputBtn" class="button hidden">&#x002B;</button>
+    </div>
+    <div id="faviconsContainer">
+        </div>
+
+    <script>
+        const urlInput = document.getElementById("urlInput");
+        const addFaviconBtn = document.getElementById("addFaviconBtn");
+        const showInputBtn = document.getElementById("showInputBtn");
+        const inputContainer = document.getElementById("inputContainer");
+        const faviconsContainer = document.getElementById("faviconsContainer");
+
+        // --- Data Storage ---
+        let favicons = JSON.parse(localStorage.getItem('favicons')) || [];
+      
+
+        // --- Functions ---
+        function saveFavicons() {
+            localStorage.setItem('favicons', JSON.stringify(favicons));
+        }
+
+        function normalizeUrl(url) {
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                return `https://${url}`;
+            }
+            return url;
+        }
+
+        function getDomainFromUrl(url) {
+            try {
+                const hostname = new URL(url).hostname;
+                // Remove 'www.' if present for cleaner display
+                return hostname.startsWith('www.') ? hostname.substring(4) : hostname;
+            } catch (e) {
+                return url; // Fallback if URL is invalid
+            }
+        }
+
+        function createFaviconElement(faviconData, index) {
+            const itemDiv = document.createElement('div');
+            itemDiv.classList.add('favicon-item');
+            itemDiv.dataset.index = index; // Store index for deletion
+
+            const img = document.createElement('img');
+            img.src = `https://www.google.com/s2/favicons?domain=${faviconData.originalUrl}&sz=256`;
+            img.alt = `Favicon for ${getDomainFromUrl(faviconData.originalUrl)}`;
+            img.onerror = () => {
+                img.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSIjY2NjIiBkPSJNMTIgMmE5Ljk5MyA5Ljk5MyAwIDAgMC05Ljk5MyA5Ljk5M0ExMC4wMTIgMTAuMDEyIDAgMCAwIDEuNzEgMTUuMDM0TDIuMjY2IDE5Ljk4YS41MDMuNTAzIDAgMCAwIC41NzguNDAzbDQuOTQ2LS41NTYgMTQuNDcxLTguNDc2QTkuOTk0IDkuOTk0IDAgMCAwIDEyIDJtLTMuMDkgMTUuMzY0bC0yLjg4OS4zMjUtLjMyNS0yLjg4OXEwLS43NzUuNTQ1LTEuMzIuNTQ2LS41NDUgMS4zMi0uNTQ1dDEuMzIxLjU0NS41NDUgMS4zMlptLTMuMzM1LTMuODQxQTguMDAzIDguMDAzIDAgMCAxIDQgMTJjMC0yLjQxNC45ODMtNC41OTkgMi41NzUtNi4xNDRsMTIuNTY1IDcuMzc0QzE3Ljk4IDExLjA4NyAxNiAxMCAxMy45MjMgMTBINDljLS45MTYgMC0xLjcwMy4yNDUtMi4zMzYuNTc3WiIvPjwvc3ZnPg=='; // Generic globe icon
+            };
+
+            const link = document.createElement('a');
+            link.href = faviconData.originalUrl;
+            link.target = '_blank'; // Open in new tab
+            link.textContent = getDomainFromUrl(faviconData.originalUrl); // Display domain name
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.classList.add('delete-btn');
+            deleteBtn.textContent = 'x';
+            deleteBtn.addEventListener('click', () => deleteFavicon(index));
+
+            itemDiv.appendChild(img);
+            itemDiv.appendChild(link);
+            itemDiv.appendChild(deleteBtn);
+
+            return itemDiv;
+        }
+
+        function renderFavicons() {
+            faviconsContainer.innerHTML = ''; // Clear existing favicons
+            favicons.forEach((data, index) => {
+                const element = createFaviconElement(data, index);
+                faviconsContainer.appendChild(element);
+            });
+        }
+
+        function addFavicon() {
+            const url = urlInput.value.trim();
+            if (!url) {
+                alert('Please enter a URL.');
+                return;
+            }
+
+            const normalizedUrl = normalizeUrl(url);
+
+            // Check for duplicates
+            if (favicons.some(f => f.originalUrl === normalizedUrl)) {
+                alert('This favicon already exists!');
+                urlInput.value = ''; // Clear input
+                return;
+            }
+
+            favicons.push({ originalUrl: normalizedUrl });
+            saveFavicons();
+            renderFavicons();
+            urlInput.value = ''; // Clear input after adding
+            toggleInputVisibility(false); // Hide input after adding
+        }
+
+        function deleteFavicon(indexToDelete) {
+            favicons.splice(indexToDelete, 1); // Remove item at index
+            saveFavicons();
+            renderFavicons(); // Re-render to update indices
+        }
+
+        function toggleInputVisibility(show) {
+            if (show) {
+                inputContainer.classList.remove('hidden');
+                showInputBtn.classList.add('hidden');
+                urlInput.focus(); // Focus on the input when it appears
+            } else {
+                inputContainer.classList.add('hidden');
+                showInputBtn.classList.remove('hidden');
+            }
+        }
+
+        // --- Event Listeners ---
+        addFaviconBtn.addEventListener('click', addFavicon);
+
+        urlInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                addFavicon();
+            }
+        });
+
+        showInputBtn.addEventListener('click', () => toggleInputVisibility(true));
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderFavicons();
+            // Hide input if there are already favicons, show if none
+            toggleInputVisibility(favicons.length === 0);
+        });
+    </script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Notes, Reminders & Calendar</title>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #e0f2f7;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #004d40;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .container {
+            display: flex;
+            gap: 25px;
+            flex-wrap: wrap;
+            max-width: 1400px; /* Increased max-width for the container */
+            width: 100%;
+            justify-content: center; /* Center items if they don't fill the max-width */
+        }
+        .section {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            /* flex: 1; -> Changed below for calendar */
+            min-width: 320px;
+            transition: transform 0.2s ease-in-out;
+            border-left: 5px solid #4CAF50; /* Accent color */
+        }
+        .section:hover {
+            transform: translateY(-3px);
+        }
+        /* Make Notes and Reminders sections take less space to allow calendar to be bigger */
+        .section:nth-child(1), /* Notes section */
+        .section:nth-child(2) { /* Reminders section */
+            flex: 1; /* Allow them to grow */
+            max-width: 450px; /* Set a max width for these two */
+        }
+
+        /* Make Calendar section much bigger */
+        .section:nth-child(3) { /* Calendar section */
+            flex: 2; /* Make it take twice the space of other flex items */
+            min-width: 600px; /* Ensure it's large enough even on smaller wraps */
+            border-left-color: #00bcd4; /* Different accent for calendar */
+        }
+
+        h2 {
+            color: #00796b;
+            border-bottom: 2px solid #e0f2f7;
+            padding-bottom: 12px;
+            margin-bottom: 25px;
+            font-size: 1.8em;
+            display: flex;
+            align-items: center;
+        }
+        h2 i {
+            margin-right: 10px;
+            color: #4CAF50;
+        }
+        textarea, input[type="text"], input[type="datetime-local"] {
+            width: calc(100% - 22px);
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #cce7ee;
+            border-radius: 6px;
+            font-size: 1em;
+            box-sizing: border-box; /* Include padding in width */
+            transition: border-color 0.3s;
+        }
+        textarea:focus, input[type="text"]:focus, input[type="datetime-local"]:focus {
+            border-color: #00bcd4;
+            outline: none;
+        }
+        button {
+            background-color: #00bcd4;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.05em;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        button:hover {
+            background-color: #0097a7;
+        }
+        .notes-list, .reminders-list {
+            margin-top: 25px;
+            border-top: 1px solid #e0f2f7;
+            padding-top: 15px;
+        }
+        .note-item, .reminder-item {
+            background-color: #e0f7fa; /* Light cyan */
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #80deea; /* Darker accent */
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: background-color 0.3s;
+        }
+        .reminder-item.overdue {
+            background-color: #ffebee; /* Light red for overdue */
+            border-left-color: #ef5350; /* Red accent */
+        }
+        .reminder-item.upcoming {
+            background-color: #e8f5e9; /* Light green for upcoming */
+            border-left-color: #66bb6a; /* Green accent */
+        }
+        .note-item p, .reminder-item p {
+            margin: 0;
+            flex-grow: 1;
+            word-break: break-word;
+            line-height: 1.5;
+        }
+        .reminder-item p strong {
+            font-size: 1.1em;
+            color: #00796b;
+        }
+        .reminder-item p small {
+            display: block;
+            color: #666;
+            font-size: 0.85em;
+            margin-top: 5px;
+        }
+        .delete-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-left: 15px;
+            transition: background-color 0.3s;
+        }
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+
+        /* Calendar Styling - MODIFIED FOR BIGGER CALENDAR */
+        .calendar-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px; /* Increased margin */
+            background-color: #e0f7fa;
+            padding: 15px 20px; /* Increased padding */
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        .calendar-nav button {
+            background: none;
+            border: none;
+            font-size: 2em; /* Larger navigation arrows */
+            color: #00796b;
+            cursor: pointer;
+            padding: 5px 10px;
+        }
+        .calendar-nav span {
+            font-size: 1.5em; /* Larger month/year text */
+            font-weight: bold;
+            color: #00796b;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px; /* Increased gap between days */
+            text-align: center;
+            width: 100%;
+        }
+        .day-name {
+            background-color: #b2ebf2;
+            color: #004d40;
+            padding: 15px; /* Larger padding for day names */
+            border-radius: 8px; /* Slightly more rounded */
+            font-weight: bold;
+            font-size: 1.1em; /* Larger day name font */
+            box-sizing: border-box;
+            min-height: 50px; /* Increased min-height */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .day-number {
+            padding: 20px; /* Much larger padding for day numbers */
+            border: 1px solid #e0f7fa;
+            border-radius: 8px; /* Slightly more rounded */
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            background-color: #f5f5f5;
+            font-size: 1.5em; /* Significantly larger day number font */
+            box-sizing: border-box;
+            min-height: 80px; /* Much larger min-height for day cells */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .day-number.current-month {
+            background-color: #ffffff;
+        }
+        .day-number:hover {
+            background-color: #e0f2f7;
+            border-color: #b2ebf2;
+        }
+        .day-number.selected {
+            background-color: #00bcd4;
+            color: white;
+            font-weight: bold;
+            border-color: #00bcd4;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        .day-number.has-event {
+            position: relative;
+            background-color: #ffe0b2;
+            border-color: #ffb74d;
+        }
+        .day-number.has-event::after {
+            content: '•';
+            position: absolute;
+            bottom: 5px; /* Adjusted position */
+            right: 5px; /* Adjusted position */
+            font-size: 2em; /* Larger dot */
+            line-height: 0;
+            color: #ff9800;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .day-number.today {
+            background-color: #c8e6c9;
+            border: 2px solid #4caf50;
+            font-weight: bold;
+        }
+        .calendar-events {
+            margin-top: 30px; /* Increased margin */
+            padding-top: 20px; /* Increased padding */
+            border-top: 1px solid #e0f2f7;
+        }
+        .calendar-events h3 {
+            color: #00796b;
+            margin-bottom: 20px; /* Increased margin */
+            font-size: 1.5em; /* Larger heading */
+        }
+        .calendar-events ul {
+            list-style: none;
+            padding: 0;
+        }
+        .calendar-events li {
+            background-color: #e3f2fd;
+            padding: 12px 18px; /* Increased padding */
+            border-radius: 8px; /* Slightly more rounded */
+            margin-bottom: 10px;
+            border-left: 4px solid #90caf9;
+            font-size: 1.1em; /* Larger event text */
+        }
+        .calendar-event-form {
+            margin-top: 25px; /* Increased margin */
+            padding-top: 20px; /* Increased padding */
+            border-top: 1px dashed #cce7ee;
+        }
+        .calendar-event-form h4 {
+            font-size: 1.2em; /* Larger heading */
+            margin-bottom: 15px;
+        }
+        .calendar-event-form input[type="text"], .calendar-event-form input[type="time"] {
+            width: calc(50% - 15px);
+            margin-right: 10px;
+            display: inline-block;
+            font-size: 1.1em; /* Larger input text */
+            padding: 12px; /* Increased padding */
+        }
+        .calendar-event-form input[type="time"] {
+            width: calc(50% - 10px);
+            margin-right: 0;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) { /* Adjust breakpoint if needed */
+            .container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .section {
+                width: 90%;
+                max-width: 800px; /* Allow all sections to grow up to a reasonable max width */
+            }
+            .section:nth-child(1),
+            .section:nth-child(2),
+            .section:nth-child(3) {
+                flex: none; /* Remove flex specific rules when stacked */
+                max-width: 800px; /* All sections get the same max-width */
+            }
+            .calendar-event-form input[type="text"], .calendar-event-form input[type="time"] {
+                width: calc(100% - 22px);
+                margin-right: 0;
+            }
+        }
+
+         @media (max-width: 600px) {
+            .day-number {
+                padding: 15px 5px; /* Reduce padding on very small screens if necessary */
+                min-height: 60px; /* Adjust min-height */
+                font-size: 1.2em;
+            }
+            .day-name {
+                padding: 10px 5px;
+                font-size: 0.9em;
+            }
+            .calendar-nav button {
+                font-size: 1.5em;
+            }
+            .calendar-nav span {
+                font-size: 1.2em;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-..." crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <h1>Your Personal Organizer</h1>
+    <div class="container">
+        <div class="section">
+            <h2><i class="fas fa-clipboard-list"></i> Notes</h2>
+            <textarea id="noteInput" placeholder="Write your note here..." rows="6"></textarea>
+            <button onclick="addNote()"><i class="fas fa-plus-circle"></i> Add Note</button>
+            <div class="notes-list" id="notesList">
+                </div>
+        </div>
+
+        <div class="section">
+            <h2><i class="fas fa-bell"></i> Reminders</h2>
+            <input type="text" id="reminderTextInput" placeholder="What do you need to be reminded of?">
+            <input type="datetime-local" id="reminderDateTimeInput">
+            <button onclick="addReminder()"><i class="fas fa-clock"></i> Set Reminder</button>
+            <div class="reminders-list" id="remindersList">
+                </div>
+        </div>
+
+        <div class="section">
+            <h2><i class="fas fa-calendar-alt"></i> Calendar</h2>
+            <div class="calendar-nav">
+                <button onclick="prevMonth()"><i class="fas fa-chevron-left"></i></button>
+                <span id="currentMonthYear"></span>
+                <button onclick="nextMonth()"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid">
+                </div>
+            <div class="calendar-events" id="calendarEvents">
+                <h3>Events for <span id="selectedDayHeader">No Day Selected</span>:</h3>
+                <ul id="selectedDayEvents">
+                    </ul>
+                <div class="calendar-event-form">
+                    <h4>Add Event to Selected Day</h4>
+                    <input type="text" id="eventTextInput" placeholder="Event description">
+                    <input type="time" id="eventTimeInput" value="09:00">
+                    <button onclick="addEventToSelectedDay()"><i class="fas fa-calendar-plus"></i> Add Event</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Use Luxon for date and time handling
+        const DateTime = luxon.DateTime;
+
+        // --- Notes Functionality ---
+        function addNote() {
+            const noteInput = document.getElementById('noteInput');
+            const noteText = noteInput.value.trim();
+            if (noteText) {
+                const notesList = document.getElementById('notesList');
+                const noteItem = document.createElement('div');
+                noteItem.classList.add('note-item');
+                noteItem.innerHTML = `<p>${noteText}</p><button class="delete-btn" onclick="deleteItem(this, 'note')"><i class="fas fa-trash-alt"></i></button>`;
+                notesList.prepend(noteItem);
+                noteInput.value = '';
+                saveNotesToLocalStorage();
+            }
+        }
+
+        function deleteItem(buttonElement, type) {
+            const item = buttonElement.parentElement;
+            item.remove();
+            if (type === 'note') {
+                saveNotesToLocalStorage();
+            } else if (type === 'reminder') {
+                saveRemindersToLocalStorage();
+            } else if (type === 'event') {
+                // If it's an event, we need to know the date it belongs to
+                // We need to pass the date associated with the event item.
+                // This assumes `selectedDate` is correctly set.
+                // For a more robust solution, store date as a data attribute on the event item.
+                const eventText = item.querySelector('span').textContent.split(' - ')[1].trim(); // Extract only the text part
+                deleteEventFromDate(selectedDate, eventText);
+                saveEventsToLocalStorage();
+                generateCalendar(currentMonth.month - 1, currentMonth.year); // Regenerate calendar to remove event dot
+                displayEventsForSelectedDay(selectedDate); // Refresh events list
+            }
+        }
+
+        function saveNotesToLocalStorage() {
+            const notesList = document.getElementById('notesList');
+            const notes = [];
+            notesList.querySelectorAll('.note-item p').forEach(p => {
+                notes.push(p.textContent);
+            });
+            localStorage.setItem('notes', JSON.stringify(notes));
+        }
+
+        function loadNotesFromLocalStorage() {
+            const notes = JSON.parse(localStorage.getItem('notes') || '[]');
+            const notesList = document.getElementById('notesList');
+            notesList.innerHTML = '';
+            notes.reverse().forEach(noteText => {
+                const noteItem = document.createElement('div');
+                noteItem.classList.add('note-item');
+                noteItem.innerHTML = `<p>${noteText}</p><button class="delete-btn" onclick="deleteItem(this, 'note')"><i class="fas fa-trash-alt"></i></button>`;
+                notesList.appendChild(noteItem);
+            });
+        }
+
+        // --- Reminders Functionality ---
+        function addReminder() {
+            const reminderTextInput = document.getElementById('reminderTextInput');
+            const reminderDateTimeInput = document.getElementById('reminderDateTimeInput');
+            const reminderText = reminderTextInput.value.trim();
+            const reminderDateTimeStr = reminderDateTimeInput.value;
+
+            if (reminderText && reminderDateTimeStr) {
+                const reminderDateTime = DateTime.fromISO(reminderDateTimeStr);
+
+                if (!reminderDateTime.isValid) {
+                    alert('Invalid date/time format for reminder.');
+                    return;
+                }
+
+                const reminder = {
+                    text: reminderText,
+                    dateTime: reminderDateTime.toISO() // Store as ISO string
+                };
+
+                // Add to display and save
+                displayReminder(reminder);
+                saveRemindersToLocalStorage();
+                reminderTextInput.value = '';
+                reminderDateTimeInput.value = '';
+
+                // Schedule notification (will be re-scheduled on load)
+                scheduleNotification(reminderText, reminderDateTime);
+            } else {
+                alert('Please enter both reminder text and a date/time.');
+            }
+        }
+
+        function displayReminder(reminder) {
+            const remindersList = document.getElementById('remindersList');
+            const reminderItem = document.createElement('div');
+            reminderItem.classList.add('reminder-item');
+
+            const reminderDateTime = DateTime.fromISO(reminder.dateTime);
+            const now = DateTime.local();
+
+            let statusClass = '';
+            let statusText = '';
+
+            if (reminderDateTime < now) {
+                statusClass = 'overdue';
+                statusText = ' (Overdue)';
+            } else if (reminderDateTime.diff(now, 'minutes').minutes < 60) { // Upcoming within 1 hour
+                statusClass = 'upcoming';
+                statusText = ' (Upcoming)';
+            }
+
+            reminderItem.classList.add(statusClass);
+
+            reminderItem.innerHTML = `
+                <p>
+                    <strong>${reminder.text}</strong>
+                    <small>${reminderDateTime.toLocaleString(DateTime.DATETIME_SHORT)}${statusText}</small>
+                </p>
+                <button class="delete-btn" onclick="deleteItem(this, 'reminder')"><i class="fas fa-trash-alt"></i></button>
+            `;
+            remindersList.prepend(reminderItem); // Add new reminders to the top
+        }
+
+
+        function saveRemindersToLocalStorage() {
+            const remindersList = document.getElementById('remindersList');
+            const reminders = [];
+            remindersList.querySelectorAll('.reminder-item').forEach(item => {
+                const text = item.querySelector('strong').textContent;
+                // Re-parse the date from the reminder item's small tag to ensure accuracy
+                const dateTimeStringDisplayed = item.querySelector('small').textContent;
+                // Remove the " (Overdue)" or " (Upcoming)" part before parsing
+                const cleanDateTimeString = dateTimeStringDisplayed.replace(/ \(.*\)$/, '').trim();
+                const dateTimeISO = DateTime.fromFormat(cleanDateTimeString, 'M/D/YY, h:mm a').toISO();
+
+                reminders.push({ text: text, dateTime: dateTimeISO });
+            });
+            localStorage.setItem('reminders', JSON.stringify(reminders));
+        }
+
+        function loadRemindersFromLocalStorage() {
+            const reminders = JSON.parse(localStorage.getItem('reminders') || '[]');
+            const remindersList = document.getElementById('remindersList');
+            remindersList.innerHTML = '';
+            reminders.sort((a, b) => DateTime.fromISO(a.dateTime).toMillis() - DateTime.fromISO(b.dateTime).toMillis()).forEach(reminder => {
+                displayReminder(reminder);
+                // Schedule notification only for future reminders
+                const reminderDateTime = DateTime.fromISO(reminder.dateTime);
+                if (reminderDateTime > DateTime.local()) {
+                   scheduleNotification(reminder.text, reminderDateTime);
+                }
+            });
+        }
+
+        // --- Notifications (Browser API with Fallback) ---
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                console.warn("This browser does not support desktop notification");
+                return;
+            }
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        console.log('Notification permission granted.');
+                    } else {
+                        console.warn('Notification permission denied.');
+                    }
+                });
+            }
+        }
+
+        function scheduleNotification(message, dateTime) {
+            const now = DateTime.local();
+            const timeDiff = dateTime.diff(now, 'milliseconds').milliseconds;
+
+            if (timeDiff > 0) {
+                setTimeout(() => {
+                    if (Notification.permission === 'granted') {
+                        new Notification('Reminder!', {
+                            body: message,
+                            icon: 'https://via.placeholder.com/50/00bcd4/ffffff?text=R' // Simple icon
+                        });
+                    } else {
+                        // Fallback for denied permission or old browsers
+                        alert(`REMINDER: ${message} (at ${dateTime.toLocaleString(DateTime.DATETIME_SHORT)})`);
+                    }
+                }, timeDiff);
+            }
+        }
+
+        // --- Calendar Functionality ---
+        let currentMonth = DateTime.local().startOf('month'); // Using Luxon DateTime object
+        let events = JSON.parse(localStorage.getItem('calendarEvents') || '{}'); // Store events
+        let selectedDate = null; // Stores the currently selected date (ISO string 'YYYY-MM-DD')
+
+        function generateCalendar(monthObj) {
+            const calendarGridEl = document.getElementById('calendarGrid');
+            calendarGridEl.innerHTML = ''; // Clear previous calendar
+
+            const startOfFirstWeek = monthObj.startOf('month').startOf('week'); // Start of the week containing the first day of the month
+            const endOfLastWeek = monthObj.endOf('month').endOf('week'); // End of the week containing the last day of the month
+
+            // Update header
+            document.getElementById('currentMonthYear').textContent = monthObj.toLocaleString({ month: 'long', year: 'numeric' });
+
+            const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            dayNames.forEach(day => {
+                const dayNameEl = document.createElement('div');
+                dayNameEl.classList.add('day-name');
+                dayNameEl.textContent = day;
+                calendarGridEl.appendChild(dayNameEl);
+            });
+
+            let dayIterator = startOfFirstWeek.startOf('day');
+            while (dayIterator <= endOfLastWeek) {
+                const dayNumberEl = document.createElement('div');
+                dayNumberEl.classList.add('day-number');
+                dayNumberEl.textContent = dayIterator.day;
+
+                const fullDateISO = dayIterator.toISODate(); //YYYY-MM-DD
+
+                if (dayIterator.month !== monthObj.month) {
+                    dayNumberEl.classList.add('other-month'); // Days from previous/next month
+                } else {
+                    dayNumberEl.classList.add('current-month');
+                }
+
+                if (fullDateISO === DateTime.local().toISODate()) {
+                    dayNumberEl.classList.add('today');
+                }
+
+                if (events[fullDateISO] && events[fullDateISO].length > 0) {
+                    dayNumberEl.classList.add('has-event');
+                }
+
+                if (fullDateISO === selectedDate) {
+                    dayNumberEl.classList.add('selected');
+                }
+
+                dayNumberEl.dataset.date = fullDateISO; // Store date as data attribute
+                dayNumberEl.addEventListener('click', () => {
+                    const previouslySelected = document.querySelector('.day-number.selected');
+                    if (previouslySelected) {
+                        previouslySelected.classList.remove('selected');
+                    }
+                    dayNumberEl.classList.add('selected');
+                    selectedDate = fullDateISO;
+                    displayEventsForSelectedDay(selectedDate);
+                });
+
+                calendarGridEl.appendChild(dayNumberEl);
+                dayIterator = dayIterator.plus({ days: 1 });
+            }
+        }
+
+        function prevMonth() {
+            currentMonth = currentMonth.minus({ months: 1 });
+            generateCalendar(currentMonth);
+            resetSelectedDayDisplay();
+        }
+
+        function nextMonth() {
+            currentMonth = currentMonth.plus({ months: 1 });
+            generateCalendar(currentMonth);
+            resetSelectedDayDisplay();
+        }
+
+        function resetSelectedDayDisplay() {
+            selectedDate = null;
+            document.getElementById('selectedDayHeader').textContent = 'No Day Selected';
+            document.getElementById('selectedDayEvents').innerHTML = '';
+        }
+
+        function displayEventsForSelectedDay(dateISO) {
+            const selectedDayEventsUl = document.getElementById('selectedDayEvents');
+            selectedDayEventsUl.innerHTML = '';
+
+            const displayDate = DateTime.fromISO(dateISO);
+            document.getElementById('selectedDayHeader').textContent = displayDate.toLocaleString(DateTime.DATE_FULL);
+
+            const eventsForDate = events[dateISO] || [];
+            if (eventsForDate.length > 0) {
+                eventsForDate.sort((a, b) => a.time.localeCompare(b.time)).forEach(event => { // Sort by time
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span>${event.time} - ${event.text}</span> <button class="delete-btn" onclick="deleteItem(this, 'event')"><i class="fas fa-trash-alt"></i></button>`;
+                    selectedDayEventsUl.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = 'No events for this day.';
+                selectedDayEventsUl.appendChild(li);
+            }
+        }
+
+        function addEventToSelectedDay() {
+            if (!selectedDate) {
+                alert('Please select a day on the calendar first!');
+                return;
+            }
+
+            const eventTextInput = document.getElementById('eventTextInput');
+            const eventTimeInput = document.getElementById('eventTimeInput');
+            const eventText = eventTextInput.value.trim();
+            const eventTime = eventTimeInput.value; // HH:MM format
+
+            if (eventText && eventTime) {
+                if (!events[selectedDate]) {
+                    events[selectedDate] = [];
+                }
+                events[selectedDate].push({ text: eventText, time: eventTime });
+                saveEventsToLocalStorage();
+
+                // Refresh the display
+                displayEventsForSelectedDay(selectedDate);
+                generateCalendar(currentMonth); // Regenerate calendar to show event dot if newly added
+
+                eventTextInput.value = '';
+                eventTimeInput.value = '09:00'; // Reset to default
+            } else {
+                alert('Please enter both event description and time.');
+            }
+        }
+
+        function deleteEventFromDate(dateISO, eventTextToDelete) {
+            if (events[dateISO]) {
+                events[dateISO] = events[dateISO].filter(event => event.text !== eventTextToDelete);
+                if (events[dateISO].length === 0) {
+                    delete events[dateISO]; // Remove date key if no events left
+                }
+            }
+        }
+
+        function saveEventsToLocalStorage() {
+            localStorage.setItem('calendarEvents', JSON.stringify(events));
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Request notification permission early
+            requestNotificationPermission();
+
+            loadNotesFromLocalStorage();
+            loadRemindersFromLocalStorage();
+            generateCalendar(currentMonth); // Generate current month's calendar
+        });
+
+        // Periodically check for upcoming reminders (every minute)
+        setInterval(() => {
+            loadRemindersFromLocalStorage(); // Reload to update 'overdue'/'upcoming' status
+        }, 60 * 1000); // Every minute
+    </script>
+</body>
+</html>
+</body>
+</html>
